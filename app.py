@@ -5,75 +5,167 @@ import pandas as pd
 import plotly.graph_objs as go
 import base64
 import io
+import dash_bootstrap_components as dbc
+from dash.dependencies import State
+from dash.dependencies import Input, Output, State, ALL, MATCH
 
-# Initialize the Dash app
-app = dash.Dash(__name__)
+# Initialize the Dash app with Bootstrap stylesheet
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+
+server = app.server
 
 # Define the layout of the app
-# Layout
 app.layout = html.Div(
     style={
-        'backgroundColor': '#222',  # Background color
-        'color': '#eee',  # Text color
+        'backgroundColor': '#222',
+        'color': '#eee',
         'padding': '20px',
-        'height': '100vh',  # Set height to 100% of viewport height
-        'width': '100vw',   # Set width to 100% of viewport width
+        'height': 'auto',  # Change to auto for responsive height
+        'minHeight': '100vh',  # Ensure minimum height is 100% of viewport height
+        'width': 'auto',
+        'overflowY': 'auto'
     },
     children=[
-    dcc.Upload(
-        id='upload-data',
-        children=html.Div([
-            'Drag and Drop or ',
-            html.A('Select Files')
-        ]),style={
-            'width': '100%',
-            'height': '60px',
-            'lineHeight': '60px',
-            'borderWidth': '1px',
-            'borderStyle': 'dashed',
-            'borderRadius': '5px',
-            'textAlign': 'center',
-            'margin': '10px'
-        },
-        # Allow multiple files to be uploaded, but this doesnt actually do anything except stop an error weirdly
-        multiple=True
-    ),
-   # Added input component
-        html.Label('Add Duplicate Graphs ', style={'color': '#bbb'}),  # Text color
-        dcc.Input(id='duplicate-count', type='number', min=0, max=4, value=0, style={'color': '#bbb'}),  # Text color
+        html.H1('DataLogViewer 2.0', style={'textAlign': 'center', 'color': '#F7AB0A'}),
+         # Buttons to open modals
+        html.Div(
+            [
+                dbc.Button("Login", id="open-login", n_clicks=0, style={'margin': '5px'}),
+                dbc.Button("Register", id="open-register", n_clicks=0, style={'margin': '5px'}),
+            ]
+        ),
+        # Upload component
+        dcc.Upload(
+            id='upload-data',
+            children=html.Div(['Drag and Drop or ', html.A('Select Files')]),
+            style={
+                'width': '100%',
+                'height': '60px',
+                'lineHeight': '60px',
+                'borderWidth': '1px',
+                'borderStyle': 'dashed',
+                'borderRadius': '5px',
+                'textAlign': 'center',
+                'margin': '10px'
+            },
+            multiple=True
+        ),
+        # Input component for duplicate graphs
+        html.Label('Add Duplicate Graphs ', style={'color': '#bbb'}),
+        dcc.Input(id='duplicate-count', type='number', min=0, max=4, value=0,style={
+                'backgroundColor': '#333',
+                'color': '#fff',
+                'border': '1px solid #555',
+                'margin': '10px',
+                'marginBottom': '10px'
+            }),
         html.Div(id='output-data-upload'),
         dcc.Graph(
             id='time-series-chart',
-            style={
-                'backgroundColor': '#333',  # Chart background color
-                'color': '#eee',  # Text color
-                'display': 'none'  # Initially hide the graph
-            }
+            style={'backgroundColor': '#333', 'color': '#eee', 'display': 'none'}
         ),
-        html.Div(id='duplicate-graphs-container')
+        html.Div(id='duplicate-graphs-container'),
+
+       
+
+        # Login modal
+        dbc.Modal(
+            [
+                dbc.ModalHeader("Login"),
+                dbc.ModalBody([
+                    dbc.Input(id="login-username", placeholder="Username", type="text"),
+                    dbc.Input(id="login-password", placeholder="Password", type="password", style={'marginTop': '10px'}),
+                ]),
+                dbc.ModalFooter(
+                    dbc.Button("Submit", id={"type": "login-submit", "index": 0}, className="ml-auto")
+                ),
+            ],
+            id="login-modal",
+            is_open=False,
+        ),
+
+        # Register modal
+        dbc.Modal(
+            [
+                dbc.ModalHeader("Register"),
+                dbc.ModalBody([
+                    dbc.Input(id="register-username", placeholder="Username", type="text"),
+                    dbc.Input(id="register-password", placeholder="Password", type="password", style={'marginTop': '10px'}),
+                    dbc.Input(id="register-email", placeholder="Email", type="email", style={'marginTop': '10px'}),
+                ]),
+                dbc.ModalFooter(
+                    dbc.Button("Submit", id={"type": "register-submit", "index": 0}, className="ml-auto")
+                ),
+            ],
+            id="register-modal",
+            is_open=False,
+        ),
     ]
 )
 
-# Validate time format
-def validate_time_format(time_str):
-    try:
-        pd.to_datetime(time_str)
-        return True
-    except ValueError:
-        return False
+# Callback to toggle login modal
+@app.callback(
+    Output("login-modal", "is_open"),
+    [Input("open-login", "n_clicks"), Input({"type": "login-submit", "index": ALL}, "n_clicks")],
+    [State("login-modal", "is_open")]
+)
+def toggle_login_modal(n_open, n_submit, is_open):
+    if n_open or any(n_submit):
+        return not is_open
+    return is_open
 
-# Callback to handle file upload and display data table and chart
-@app.callback([
-    Output('output-data-upload', 'children'),
-    Output('time-series-chart', 'figure'),
-    Output('time-series-chart', 'style'),  # Output for updating graph style
-    Output('duplicate-graphs-container', 'children')
-],
-    [Input('upload-data', 'contents'),
-     Input('upload-data', 'filename'),
-     Input('duplicate-count', 'value')])
-def update_output(contents, filename, duplicate_count):
-    if contents is not None:
+# Callback to toggle register modal
+@app.callback(
+    Output("register-modal", "is_open"),
+    [Input("open-register", "n_clicks"), Input({"type": "register-submit", "index": ALL}, "n_clicks")],
+    [State("register-modal", "is_open")]
+)
+def toggle_register_modal(n_open, n_submit, is_open):
+    if n_open or any(n_submit):
+        return not is_open
+    return is_open
+
+# Combined callback for handling file upload, login, and registration
+@app.callback(
+    [
+        Output('output-data-upload', 'children'),
+        Output('time-series-chart', 'figure'),
+        Output('time-series-chart', 'style'),  # Output for updating graph style
+        Output('duplicate-graphs-container', 'children')
+    ],
+    [
+        Input('upload-data', 'contents'),
+        Input('upload-data', 'filename'),
+        Input('duplicate-count', 'value'),
+        Input({"type": "login-submit", "index": ALL}, "n_clicks"),
+        Input({"type": "register-submit", "index": ALL}, "n_clicks")
+    ],
+    [
+        State("login-username", "value"),
+        State("login-password", "value"),
+        State("register-username", "value"),
+        State("register-password", "value"),
+        State("register-email", "value")
+    ]
+)
+def update_output(contents, filename, duplicate_count, n_login_clicks, n_register_clicks,
+                  login_username, login_password, register_username, register_password, register_email):
+    ctx = dash.callback_context
+
+    if not ctx.triggered:
+        return None, {'data': [], 'layout': {}}, {'display': 'none'}, []
+
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    if "login-submit" in button_id and any(n_login_clicks):
+        # Authentication logic goes here (e.g., verify credentials)
+        return html.Div(f"Logged in as {login_username}"), {'data': [], 'layout': {}}, {'display': 'none'}, []
+
+    elif "register-submit" in button_id and any(n_register_clicks):
+        # Registration logic goes here (e.g., create a new user)
+        return html.Div(f"Registered with username {register_username} and email {register_email}"), {'data': [], 'layout': {}}, {'display': 'none'}, []
+
+    elif contents is not None:
         content_type, content_string = contents[0].split(',')
         decoded = base64.b64decode(content_string)
         try:
@@ -95,7 +187,9 @@ def update_output(contents, filename, duplicate_count):
                     html.Hr(),
                     html.Div(
                         style={'overflowY': 'auto', 'height': '400px'},
-                        children=html.Table([
+                        children=
+                            
+                            html.Table([
                             # Header
                             html.Thead([
                                 html.Tr([html.Th(col) for col in df.columns])
@@ -107,7 +201,8 @@ def update_output(contents, filename, duplicate_count):
                                     html.Td(df.iloc[i][col]) for col in df.columns
                                 ]) for i in range(len(df))
                             ])
-                        ])
+
+                                    ])
                     )
                 ]
             )
@@ -143,9 +238,15 @@ def update_output(contents, filename, duplicate_count):
                 html.H5(str(e)),
             ])
             return error_message, {'data': [], 'layout': {}}, {'display': 'none'}, []
-
+    
     return None, {'data': [], 'layout': {}}, {'display': 'none'}, []
 
+def validate_time_format(time_str):
+    try:
+        pd.to_datetime(time_str)
+        return True
+    except ValueError:
+        return False
 
 if __name__ == '__main__':
     app.run_server(debug=True)
